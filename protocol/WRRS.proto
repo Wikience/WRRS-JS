@@ -1,0 +1,257 @@
+package org.wikience.wrrs.wrrsprotobuf;
+
+/** (c) 2016 by Antonio Rodriges, rodriges@wikience.org */
+
+option java_outer_classname = "RProtocol";
+
+/* Handshake message sent by client as the first message once connection is established */
+message ConnectRequest {
+    // server-wide id, sent to server if user knows it
+    optional int32  clientID = 1;
+
+    // ensure comliency between server- and client-side protocol implementations
+    optional int32  protocolVersion = 2;
+
+    // whether server should respond with datasets tree
+    optional bool   retrieveDatasetTree = 3;
+}
+
+/* Message sent by client to retrieve raw (source) raster data */
+message RasterRequest {
+    // See below
+    optional RequestResponseMeta    requestResponseMeta     = 1;
+
+    // See below. If absent, server acts as if
+    // this field is present and filled in with default values
+    optional IncludeRequestMeta     includeRequestMeta      = 2;
+
+    /* Parameters for raster retrieval */
+    // Should be customized by users if necessary, see below
+    optional RequestParams          requestParams           = 3;
+}
+
+/* Message sent back to client in response to "RasterRequest" */
+message RasterResponse {
+    // Success, failure, etc.
+    // If the request failed, other fields
+    // may not present in this message.
+    optional ResponseStatus     responseStatus          = 1;
+
+    // Simply copied by server unmodified from RasterRequest message
+    optional RequestResponseMeta requestResponseMeta    = 2;
+
+    // Included if RasterRequest.includeParams = true.
+    // The parameters of the returned raster object
+    // may be different that that of the requested
+    // (e.g., adjusted latlonbox, datetime, etc.)
+    optional RequestParams      requestParams           = 3;
+
+    // Included if RasterRequest.includeAttributes = true.
+    optional RasterAttributes   rasterAttributes        = 4;
+
+    // Dimensions of possibly multidimensional array
+    optional RasterDimensions   rasterDimensions        = 5;
+
+    // Actually the data, possibly multidimensional array
+    optional RasterData         rasterData              = 6;
+}
+
+message RequestResponseMeta {
+    // Client may issue an arbitrary number of GetRaster requests.
+    // Thus, a unique id generated on client is used to match the reponse with
+    // the initial query (responses come unordered).
+    // This id is not handled in any way on server side,
+    // it is simply copied by server into the response.
+    optional int32      requestId           = 1;
+}
+
+/* Used in RasterRequest message */
+message IncludeRequestMeta {
+    // Whether to include in the response message adjusted parameters
+    // that were sent in this message (RequestParams  params, see below)
+    optional bool       includeParams       = 1 [default = false];
+
+    // Whether to include in the response message raster metadata
+    // (e.g., scale factor, add offset). Client may wish to cash metadata,
+    // though their volume is negligible compared to main body of raster data.
+    optional bool       includeAttributes   = 2 [default = true];
+
+    // The same as above, but for dimensions
+    optional bool       includeDimensions   = 3 [default = true];
+
+    // Whether to include source (raw) raster data into the response.
+    // If set to "false", server will respond with raster attributes
+    // and raster dimensions if includeAttributes = true and
+    // includeDimensions = true without sending the data.
+    // This may be useful if we only want to check for metadata
+    // without retrieving data.
+    optional bool       includeRasterData   = 4 [default = true];
+}
+
+message ResponseStatus {
+    optional int32  code        =   1;
+    optional string message     =   2;
+}
+/*************************************************************************/
+// These messages may be customized by users.
+//
+// Add there all parameters that are handled by your server.
+// E.g.: optional <type> <param_name> = <index>; // <comment>
+//
+// Please, add after
+// ADDITIONAL **** GO HERE IF REQUIRED
+//
+// Recompile this file into "WRRS.proto.js" with
+// pbjs WRRS.proto  -e rprotocol -t js > WRRS.proto.js
+/*************************************************************************/
+
+message RequestParams {
+    // E.g.: "merra.tavg1_2d_rad_Nx.T"
+    optional string         datasetId   = 1;
+
+    // Start and end date and time in milliseconds since 01 Jan 1979, 00:00 (GMT+00:00)
+    optional TTimeInterval  timeInterval= 2;
+
+    // Zoom level
+    optional int32          zoom        = 3 [default = 0];
+
+    // Geographical area/region
+    optional TLatLonBox     latlonBox   = 4;
+
+    // ADDITIONAL PARAMETERS GO HERE IF REQUIRED
+    // E.g.: z (level), run, path, row, version, revision, etc.
+}
+
+message RasterAttributes {
+    // Value used to designate missing values
+    optional double missingValue    = 1;
+
+    // <original value> = <packed value> * scaleFactor + addOffset
+    optional double addOffset       = 2 [default = 0];
+    optional double scaleFactor     = 3 [default = 1];
+
+    // minimal and maximal values in the provided raster
+    optional double minValue        = 4;
+    optional double maxValue        = 5;
+
+    // Units, e.g. K, kg, mg/m^3, etc.
+    optional string units           = 6;
+
+    // ADDITIONAL ATTRIBUTES GO HERE IF REQUIRED
+    // e.g.: CRS, EPSG, etc.
+}
+
+/* Shape of raster */
+/* It is easier to have dedicated, named fields
+   for each dimension rather than just a list of Dimension1D objects,
+   e.g. repeated Dimension1D dimensions = X; */
+/* In the case the result is not a grid
+   (e.g. time series for a single point, 2D slice z-lat, etc.),
+   it will contain other dimensions than just lat and lon,
+   the shape of "data" array is determined by the size of the dimensions
+   (number of elements) and their order (index)
+*/
+message RasterDimensions {
+    optional Dimension1D    lat     = 1;
+    optional Dimension1D    lon     = 2;
+
+    optional Dimension1Int  time    = 3;
+    optional Dimension1D    level   = 4;  // sometimes called "z"
+
+    // For rectilinear grids or meshes
+    // i.e., either both "lat" and "lon" are present and "latlon" is absent,
+    // or only "latlon" is present while both "lat" and "lon" are absent
+    optional Dimension2D    latlon  = 5;
+
+    // ADDITIONAL DIMENSIONS GO HERE IF REQUIRED
+    // e.g.: version, run, etc.
+}
+
+/*****************************************************************************/
+// Auxiliary data types
+/*****************************************************************************/
+
+// Bounding box
+message TLatLonBox {
+    optional double latitudeNorth = 1 [default = -90.0];
+    optional double latitudeSouth = 2 [default =  90.0];
+    optional double longitudeEast = 3 [default = -180.0];
+    optional double longitudeWest = 4 [default =  180.0];
+}
+
+// Time is in milliseconds since 01 Jan 1979, 00:00 (GMT+00:00)
+// Set "timeStartMillis" equal to "timeEndMillis"
+// to denote a time moment (e.g., request raster for a given date and time).
+message TTimeInterval {
+    optional int64 timeStartMillis  = 1 [default = 0];
+    optional int64 timeEndMillis    = 2 [default = 0];
+}
+
+// Actually the data, possibly multidimensional array
+message RasterData {
+    repeated double data = 1;
+}
+
+// A single dimension of type "double"
+message Dimension1D {
+    // The index of this dimension in the multidimensional array
+    optional int32 index    = 1;
+
+    // In case the values are regular, i.e. expressed as
+    // "start",
+    // "start" + "step",
+    // "start" + "step" * 2,
+    //  ..., "end"
+    optional double start   = 2;
+    optional double step    = 3;
+    optional double end     = 4;
+
+    // In case the dimension is irregular (all 3 fields above are omitted),
+    // this field will contain values for this dimension
+    repeated double values  = 5;
+
+    // The name is specified in "Dimensions" message,
+    // but this field may contain, for ex. "Latitude", "Level", etc.
+    optional string fullname= 6;
+
+    // Units, e.g. "degrees north", "sigma level"
+    optional string units   = 7;
+}
+
+// Special integer dimension, e.g. may be used for time
+message Dimension1Int {
+    // The index of this dimension in the multidimensional array
+    optional int32 index    = 1 [default = 0];
+
+    // In case the values are regular, i.e. expressed as
+    // "start" + "base",
+    // "start" + "base" + "step",
+    // "start" + "base" + "step" * 2,
+    // ...,
+    //   "end" + "base"
+    //
+    // "base" is introduced to make the values smaller
+    // and occupy less space (since variable length encoding is used
+    // by protocol buffers)
+    optional int64 base    = 2;
+    optional int64 start   = 3;
+    optional int64 step    = 4;
+    optional int64 end     = 5;
+
+    // In case the dimension is irregular
+    // "base" may be used here as well
+    repeated int64 values  = 6;
+
+    // Units
+    optional string units   = 7;
+}
+
+/* For rectilinear grids or meshes */
+message Dimension2D {
+    repeated Point2D point2D = 1;
+}
+
+message Point2D {
+    optional double lat = 1;
+    optional double lon = 2;
+}
