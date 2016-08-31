@@ -27,6 +27,14 @@ WRRS Sample Server
 ------------------
 Sample Java WRRS Server is available at https://github.com/Wikience/RServer
 
+WRRS Protocol Buffers Modification
+----------------------------------
+
+If you modify ```WRRS.proto```, be sure to recompile it into ```WRRS.proto.js``` (this project)
+ and ```RProtocol.java``` from https://github.com/Wikience/RServer. 
+ 
+See ```compile_win.bat``` for Windows example.
+
 Include into HTML
 -----------------
 When including WRRS-JS into an HTML page, be sure to include libraries in correct order.
