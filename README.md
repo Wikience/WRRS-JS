@@ -1,5 +1,3 @@
-WRRS-JS is WRRS JavaScript Client
-
 WRRS &mdash; Web Raw Raster Service
 -----------------------------------
 New network protocol based on WebSocket and Google Protocol Buffers for **source (raw) raster data** delivery to Web browsers.
