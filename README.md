@@ -29,6 +29,20 @@ WRRS Sample Server
 ------------------
 Sample Java WRRS Server is available at https://github.com/Wikience/RServer
 
+Include into HTML
+-----------------
+When including WRRS-JS into an HTML page, be sure to include libraries in correct order.
+ For example:
+
+```
+<script src="/WRRS/bson.js"></script>
+<script src="/WRRS/long.min.js"></script>
+<script src="/WRRS/bytebuffer.min.js"></script>
+<script src="/WRRS/protobuf.min.js"></script>
+<script src="/WRRS/WRRS.proto.js"></script>
+<script src="/WRRS/WRRS.js"></script>
+```
+
 Tests
 -----
 Karma-Mocha-Chai are used to test WRRS-JS, see "test" folder and "karma.conf.js".
