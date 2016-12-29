@@ -1,12 +1,5 @@
 /** (c) 2016 by Antonio Rodriges, rodriges@wikience.org */
 
-/* For testing purposes */
-var PTEST = {};
-PTEST.INVALID_VERSION = 1000;
-PTEST.TIMEOUT_VERSION = 2000;
-PTEST.CORRUPT_BSON_VERSION = 3000;
-
-
 describe('WRRS HANDSHAKE tests', function () {
     it('Should receive datasets tree', function (done) {
         var R = new WRRS();

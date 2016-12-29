@@ -8,6 +8,10 @@ module.exports = function (config) {
             }
         },
 
+        browserNoActivityTimeout: 3600000,
+        browserDisconnectTimeout: 3600000,
+        captureTimeout: 3600000,
+
         // base path that will be used to resolve all patterns (eg. files, exclude)
         basePath: '',
 
@@ -25,6 +29,7 @@ module.exports = function (config) {
             'node_modules/long/dist/long.min.js',
             'node_modules/protobufjs/node_modules/bytebuffer/dist/bytebuffer.min.js',
             'node_modules/protobufjs/dist/protobuf.min.js',
+            'bower_components/pako/dist/pako.min.js',
 
             // alternative way to upload the protocol:
             // {pattern: 'protocol/WRRS.proto', included: false},
@@ -34,10 +39,12 @@ module.exports = function (config) {
 
             // correct order of libs
             'test/WRRS.Common.Test.js',
-            'test/WRRS.Handshake.Test.js',
-            'test/WRRS.QPool.Test.js',
-            'test/WRRS.Request.Test.js',
-            'test/WRRS.NDparse.Test.js'
+            // 'test/WRRS.Handshake.Test.js',
+            // 'test/WRRS.QPool.Test.js',
+            // 'test/WRRS.Request.Test.js',
+            //'test/WRRS.NDparse.Test.js',
+            //'test/WRRS.ZLIB.Test.js',
+            'test/WRRS.Render.Test.js'
         ],
 
         // list of files to exclude
@@ -74,7 +81,7 @@ module.exports = function (config) {
 
         // start these browsers
         // available browser launchers: https://npmjs.org/browse/keyword/karma-launcher
-        browsers: ['Firefox'],
+        browsers: ['Chrome'],
 
 
         // Continuous Integration mode
@@ -85,4 +92,4 @@ module.exports = function (config) {
         // how many browser should be started simultaneous
         concurrency: Infinity
     })
-}
+};

@@ -2,3 +2,4 @@ node_modules/
 .idea/
 protocol/protoc-2.6.1.exe
 lib/
+bower_components/

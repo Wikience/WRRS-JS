@@ -88,6 +88,12 @@ var wrrsprotobuf = dcodeIO.ProtoBuf.newBuilder({})['import']({
                     "type": "RasterData",
                     "name": "rasterData",
                     "id": 6
+                },
+                {
+                    "rule": "optional",
+                    "type": "ResponseStatistics",
+                    "name": "statistics",
+                    "id": 7
                 }
             ]
         },
@@ -99,6 +105,12 @@ var wrrsprotobuf = dcodeIO.ProtoBuf.newBuilder({})['import']({
                     "type": "int32",
                     "name": "requestId",
                     "id": 1
+                },
+                {
+                    "rule": "optional",
+                    "type": "int32",
+                    "name": "flag",
+                    "id": 2
                 }
             ]
         },
@@ -342,10 +354,75 @@ var wrrsprotobuf = dcodeIO.ProtoBuf.newBuilder({})['import']({
             "name": "RasterData",
             "fields": [
                 {
+                    "rule": "optional",
+                    "type": "COMPRESSION_METHOD",
+                    "name": "compressionMethod",
+                    "id": 1,
+                    "options": {
+                        "default": "NO_COMPRESSION"
+                    }
+                },
+                {
+                    "rule": "optional",
+                    "type": "int32",
+                    "name": "bytesPerElement",
+                    "id": 2
+                },
+                {
+                    "rule": "optional",
+                    "type": "bytes",
+                    "name": "dataCompressed",
+                    "id": 3
+                },
+                {
                     "rule": "repeated",
                     "type": "double",
                     "name": "data",
+                    "id": 4
+                }
+            ],
+            "enums": [
+                {
+                    "name": "COMPRESSION_METHOD",
+                    "values": [
+                        {
+                            "name": "NO_COMPRESSION",
+                            "id": 0
+                        },
+                        {
+                            "name": "ZLIB",
+                            "id": 1
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "ResponseStatistics",
+            "fields": [
+                {
+                    "rule": "optional",
+                    "type": "int64",
+                    "name": "fileRead_ms",
                     "id": 1
+                },
+                {
+                    "rule": "optional",
+                    "type": "int64",
+                    "name": "toRGB_ms",
+                    "id": 2
+                },
+                {
+                    "rule": "optional",
+                    "type": "int64",
+                    "name": "toPNG_ms",
+                    "id": 3
+                },
+                {
+                    "rule": "optional",
+                    "type": "int64",
+                    "name": "toZIP_ms",
+                    "id": 4
                 }
             ]
         },

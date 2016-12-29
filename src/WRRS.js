@@ -3,7 +3,7 @@
 /** (c) 2016 by Antonio Rodriges, rodriges@wikience.org
  *
  * WRRS JavaScript Client (Web Raw Raster Service)
- * 
+ *
  * Simple network protocol for raw (source) raster data
  * exchange between browser-based JavaScript Web clients
  * and WebSocket or other TCP/IP-based servers.
@@ -30,7 +30,7 @@ function WRRS() {
 
     /* Whether to request a datasets tree*/
     self.RETRIEVE_DATASETS_TREE = true;
-    
+
     /* JSON Tree of datasets received from server */
     self.datasets = {};
 
@@ -74,7 +74,9 @@ function WRRS() {
         ON_SERVER_ERROR: 4,             // received response with error flag
         ON_NO_RESPONSE_HANDLER: 5,      // received response without "requestId"
         ON_NO_REQUEST_IN_POOL: 6,       // Could not locate request in pool with given "requestId"
-        ON_ERROR_PARSING_NDARRAY: 7     // errors while restoring received nD array
+        ON_ERROR_PARSING_NDARRAY: 7,    // errors while restoring received nD array
+        ON_ERROR_UNKNOWN_COMPRESSION: 8,// compression method not supported
+        ON_ERROR_DECOMPRESS: 9           // error while decompressing
     };
 
     /* Should accept object with {state, RasterResponse, Request} */
@@ -428,6 +430,9 @@ function WRRS() {
             var TimeInterval = new R.PROTOBUF.TTimeInterval();
 
             RequestResponseMeta.setRequestId(self.requestId);
+            if (self.flag != undefined) {
+                RequestResponseMeta.setFlag(self.flag);
+            }
             RasterRequest.setRequestResponseMeta(RequestResponseMeta);
 
             TimeInterval.setTimeStartMillis(params.datetime);
@@ -441,7 +446,15 @@ function WRRS() {
 
         self.setUserCallback = function (callback) {
             self.usercallback = callback;
-        }
+        };
+        
+        self.setFlag = function (flag) {
+            self.flag = flag;
+        };
+        
+        self.setNDarrayParseFlag = function (flag) {
+            self.NDarrayParseFlag = flag;
+        };
 
         /* params = {State, RasterResponse} */
         self.onResponse = function (params) {
@@ -452,8 +465,8 @@ function WRRS() {
     };
 
     self.sendRequest = function (Query) {
-        if ( self.STATE !== self.NWSTATES.SUCCESS_CONNECT_WITH_DATASETSTREE &&
-             self.STATE !== self.NWSTATES.SUCCESS_CONNECT_WITHOUT_DATASETSTREE ) {
+        if (self.STATE !== self.NWSTATES.SUCCESS_CONNECT_WITH_DATASETSTREE &&
+            self.STATE !== self.NWSTATES.SUCCESS_CONNECT_WITHOUT_DATASETSTREE) {
             throw new Error("Cannot send request, inappropriate state: " + self.STATE);
         }
 
@@ -470,7 +483,8 @@ function WRRS() {
             if (Query.STATE === Query.STATES.SENT) {
                 Query.STATE = Query.STATES.TIMEOUT;
                 Query.onResponse({
-                    State: self.IOSTATES.ON_RESPONSE_TIMEOUT
+                    State: self.IOSTATES.ON_RESPONSE_TIMEOUT,
+                    Error: "Timeout"
                 });
             }
         }, self.IO_TIMEOUT_THRESHOULD);
@@ -540,24 +554,88 @@ function WRRS() {
 
             if (response.rasterData != null && response.rasterDimensions != null) {
                 try {
+                    // Whether data is compressed?
+                    if (response.rasterData.compressionMethod != self.PROTOBUF.RasterData.COMPRESSION_METHOD.NO_COMPRESSION) {
+                        if (response.rasterData.compressionMethod != self.PROTOBUF.RasterData.COMPRESSION_METHOD.ZLIB) {
+                            Q.onResponse({
+                                State: self.IOSTATES.ON_ERROR_UNKNOWN_COMPRESSION,
+                                RasterResponse: response
+                            });
+                            return;
+                        }
+
+                        if (response.rasterData.dataCompressed == null) {
+                            Q.onResponse({
+                                State: self.IOSTATES.ON_ERROR_DECOMPRESS,
+                                RasterResponse: response,
+                                Error: {Message: "No 'dataCompressed' field"}
+                            });
+                            return;
+                        }
+
+                        if (response.rasterData.bytesPerElement == null) {
+                            Q.onResponse({
+                                State: self.IOSTATES.ON_ERROR_DECOMPRESS,
+                                RasterResponse: response,
+                                Error: {Message: "No 'bytesPerElement' field"}
+                            });
+                            return;
+                        }
+
+                        // Decompress
+                        var compressed = new Uint8Array(response.rasterData.getDataCompressed().toBuffer());
+                        try {
+                            var decompressed = pako.inflate(compressed);
+                            switch (response.rasterData.bytesPerElement) {
+                                case 1:
+                                    response.rasterData.data = decompressed;
+                                    break;
+                                case 2:
+                                    response.rasterData.data = new Uint16Array(decompressed.buffer);
+                                    break;
+                                case 4:
+                                    response.rasterData.data = new Uint32Array(decompressed.buffer);
+                                    break;
+                                default:
+                                    Q.onResponse({
+                                        State: self.IOSTATES.ON_ERROR_DECOMPRESS,
+                                        RasterResponse: response,
+                                        Error: {Message: "Unsupported 'bytesPerElement' value: " + response.bytesPerElement}
+                                    });
+                                    return;
+                            }
+                        } catch (err) {
+                            Q.onResponse({
+                                State: self.IOSTATES.ON_ERROR_DECOMPRESS,
+                                RasterResponse: response,
+                                Error: err
+                            });
+                            return;
+                        }
+                    }
+
                     rasterData =
                         self.parseNDarray(
                             response.rasterDimensions,
-                            response.rasterData.data);
+                            response.rasterData.data,
+                            Q.NDarrayParseFlag);
                 } catch (err) {
                     Q.onResponse({
                         State: self.IOSTATES.ON_ERROR_PARSING_NDARRAY,
                         RasterResponse: response,
                         Error: err
                     });
+                    return;
                 }
             }
 
             Q.response = {
                 responseStatus: responseStatus,
-                rasterData: rasterData,
+                rasterData: rasterData.nDarray,
+                rasterShape: rasterData.shape,
                 rasterDimensions: rasterDimensions,
-                rasterAttributes: rasterAttributes
+                rasterAttributes: rasterAttributes,
+                statistics: response.statistics
             };
 
             self.QueryPool.removeQuery(Q.requestId);
@@ -571,16 +649,42 @@ function WRRS() {
         reader.readAsArrayBuffer(event.data);
     };
 
-    self.parseNDarray = function (dimensions, array) {
+    self.parseNDarray = function (dimensions, array, unfoldFlag) {
         var dims = Object.keys(dimensions);
         var shape = [];
         try {
             dims.forEach(function (key, index) {
                 var dim = dimensions[key];
                 if (dim) {
-                    if (dim.index == null || dim.values == null) {
-                        throw new Error("'index' or 'values' not defined");
-                    } else if (isNumeric(dim.index) && dim.index >= 0) {
+                    if (dim.index == null) {
+                        throw new Error("'index' not defined");
+                    }
+
+                    if (dim.values == null || dim.values.length == 0) {
+                        if (dim.start == null || dim.step == null || dim.end == null) {
+                            throw new Error("Neither 'values' nor 'start', 'step', 'end' are defined");
+                        }
+                        if (dim.step == 0) {
+                            throw new Error("'step' == 0");
+                        }
+                        if (!isNumeric(dim.step) || !isNumeric(dim.start) || !isNumeric(dim.end)) {
+                            throw new Error("Not numeric: 'start' or 'step' or 'end'");
+                        }
+
+                        var sign = (dim.step > 0) ? 1 : -1;
+                        var len = (dim.end - dim.start + sign) / dim.step;
+
+                        if (len <= 0) {
+                            throw new Error("Resulting dimension length is <= 0: dim index = " + dim.index);
+                        }
+
+                        dim.values = new Array(len);
+                        for (var i = 0; i < len; i++) {
+                            dim.values[i] = dim.start + i * dim.step;
+                        }
+                    }
+
+                    if (isNumeric(dim.index) && dim.index >= 0) {
                         if (shape[dim.index] !== undefined) {
                             throw new Error("Already have dim with index " + dim.index);
                         } else {
@@ -600,19 +704,13 @@ function WRRS() {
 
         var number = 1;
         for (var i = 0; i < shape.length; i++) {
-            try {
-                if (!isNumeric(shape[i])) {
-                    throw new Error("Incorrect shape: " +
-                        JSON.stringify(shape) + " " +
-                        JSON.stringify(dimensions));
-                }
-
-                number = number * shape[i];
-            } catch (err) {
+            if (!isNumeric(shape[i])) {
                 throw new Error("Incorrect shape: " +
                     JSON.stringify(shape) + " " +
                     JSON.stringify(dimensions));
             }
+
+            number = number * shape[i];
         }
 
         function isNumeric(n) {
@@ -624,9 +722,14 @@ function WRRS() {
         }
 
         var idx = 0;
-        var nDarr = recursivelyCreate(undefined, array, 0);
+        var nDarr;
+        if (unfoldFlag === undefined) {
+            nDarr = recursivelyCreate(undefined, array, 0);
+        } else {
+            nDarr = array;
+        }
 
-        return nDarr;
+        return {nDarray: nDarr, shape: shape};
 
         function recursivelyCreate(dst, src, si) {
             if (dst === undefined) {

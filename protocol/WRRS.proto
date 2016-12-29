@@ -54,6 +54,9 @@ message RasterResponse {
 
     // Actually the data, possibly multidimensional array
     optional RasterData         rasterData              = 6;
+
+    // Server-side statistics
+    optional ResponseStatistics statistics              = 7;
 }
 
 message RequestResponseMeta {
@@ -63,6 +66,9 @@ message RequestResponseMeta {
     // This id is not handled in any way on server side,
     // it is simply copied by server into the response.
     optional int32      requestId           = 1;
+
+    // Used during unit tests
+    optional int32      flag                = 2;
 }
 
 /* Used in RasterRequest message */
@@ -177,6 +183,9 @@ message TLatLonBox {
     optional double latitudeSouth = 2 [default =  90.0];
     optional double longitudeEast = 3 [default = -180.0];
     optional double longitudeWest = 4 [default =  180.0];
+
+    optional int32  tileLatSize   = 5 [default = 256];
+    optional int32  tileLonSize   = 6 [default = 256];
 }
 
 // Time is in milliseconds since 01 Jan 1979, 00:00 (GMT+00:00)
@@ -189,7 +198,24 @@ message TTimeInterval {
 
 // Actually the data, possibly multidimensional array
 message RasterData {
-    repeated double data = 1;
+    enum COMPRESSION_METHOD {
+        NO_COMPRESSION = 0;
+        ZLIB = 1;
+    }
+
+    optional COMPRESSION_METHOD compressionMethod   = 1 [default = NO_COMPRESSION];
+    optional int32 bytesPerElement                  = 2;  // used for 'dataCompressed'
+    optional bytes dataCompressed                   = 3;  // compressed data
+
+    repeated double data                            = 4; // non-compressed data
+}
+
+// Server-side statistics
+message ResponseStatistics {
+    optional int64 fileRead_ms        =   1; // Time to open and read file
+    optional int64 toRGB_ms           =   2; // Time to convert to RGB
+    optional int64 toPNG_ms           =   3; // Time to convert to PNG
+    optional int64 toZIP_ms           =   4; // Time to pack with GZIP
 }
 
 // A single dimension of type "double"
